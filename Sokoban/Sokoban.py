@@ -1,0 +1,462 @@
+import pygame
+import sys
+from os import listdir
+
+class Grille:
+    
+    def __init__(self,nbl,nbc,init=0,nord=0,est=1,sud=2,ouest=3):
+        self.nbl = nbl
+        self.nbc = nbc
+        self.nord = nord
+        self.est = est
+        self.sud = sud
+        self.ouest = ouest
+        self.grille = [[init] * nbc for _ in range(nbl)]
+        
+    def __repr__(self):
+        res = ''
+        for ligne in self.grille:
+            res += '\n'+ ''.join(str(val) for val in ligne)
+        return res
+
+    def __add__(self, other):
+        res = Grille(self.nbl, self.nbc)
+        for i in range(self.nbl):
+            for j in range(self.nbc):
+                res.grille[i][j] = self.grille[i][j] + other.grille[i][j]
+        return res
+
+    def __len__(self):
+        return self.nbl * self.nbc
+
+    def lc_to_case(self, i, j):
+        return i * self.nbc + j
+
+    def case_to_lc(self, num_case):
+        return num_case // self.nbc, num_case % self.nbc
+
+    def get_case(self, num_case):
+        l, c = self.case_to_lc(num_case)
+        return self.grille[l][c]
+
+    def set_case(self, num_case, val):
+        l, c = self.case_to_lc(num_case)
+        self.grille[l][c] = val
+
+    def cases(self, symb):
+        return [i for i in range(self.nbl * self.nbc) if self.get_case(i) == symb]
+
+    def lig_col_next(self, lig, col, direction, tore=False):
+        new_lig, new_col = lig, col
+        if direction == self.nord:
+            if not tore and lig == 0:
+                return -1
+            new_lig, new_col = (lig - 1) % self.nbl, col
+        if direction == self.est:
+            if not tore and col == self.nbc - 1:
+                return -1
+            new_lig, new_col = lig, (col + 1) % self.nbc
+        if direction == self.sud:
+            if not tore and lig == self.nbl - 1:
+                return -1
+            new_lig, new_col = (lig + 1) % self.nbl, col
+        if direction == self.ouest:
+            if not tore and col == 0:
+                return -1
+            new_lig, new_col = lig, (col - 1) % self.nbc
+        return new_lig, new_col
+
+    def num_case_next(self, num_case, direction, tore=False):
+        lig, col = self.case_to_lc(num_case)
+        val = self.lig_col_next(lig, col, direction, tore)
+        if val == -1:
+            return val
+        return self.lc_to_case(val[0], val[1])
+
+class LevelSok(Grille):
+
+    def __init__(self, file):
+        self.file = file
+        with open(file, 'r', encoding='utf-8') as f:
+            self.temp = []
+            ligne = f.readline()[:-1]
+            while '#' in ligne:
+                self.temp.append(list(ligne))
+                ligne = f.readline()[:-1]
+            nbl = len(self.temp)
+            nbc = max(len(ligne) for ligne in self.temp)
+        Grille.__init__(self, nbl, nbc, ' ')
+        self.grille = []
+        for ligne in self.temp:
+            self.grille.append(ligne + ['']*(nbc-len(ligne)))
+
+    def deplace_man_N(self):
+        if len(self.cases('@')) == 1:
+            num_man = self.cases('@')
+        else:
+            num_man = self.cases('+')
+        man = self.get_case(num_man[0])
+        man_nord = self.num_case_next(num_man[0], 0)
+        new_man = self.get_case(man_nord)
+        if new_man == '#':
+            return 'mur'
+        elif new_man == '$':
+            self.deplace_caisse_N(man_nord)
+        elif new_man == '*':
+            self.deplace_caisse_N(man_nord)
+        elif new_man == '.':
+            if man == '@':
+                self.set_case(man_nord, '+')
+                self.set_case(num_man[0], ' ')
+            else:
+                self.set_case(man_nord, '+')
+                self.set_case(num_man[0], new_man)
+        else:
+            if man == '+':
+                man = '@'
+                new_man = '.'
+            self.set_case(man_nord, man)
+            self.set_case(num_man[0], new_man)
+
+    def deplace_man_E(self):
+        if len(self.cases('@')) == 1:
+            num_man = self.cases('@')
+        else:
+            num_man = self.cases('+')
+        man = self.get_case(num_man[0])
+        man_est = self.num_case_next(num_man[0], 1)
+        new_man = self.get_case(man_est)
+        if new_man == '#':
+            return 'mur'
+        elif new_man == '$':
+            self.deplace_caisse_E(man_est)
+        elif new_man == '*':
+            self.deplace_caisse_E(man_est)
+        elif new_man == '.':
+            if man == '@':
+                self.set_case(man_est, '+')
+                self.set_case(num_man[0], ' ')
+            else:
+                self.set_case(man_est, '+')
+                self.set_case(num_man[0], new_man)
+        else:
+            if man == '+':
+                man = '@'
+                new_man = '.'
+            self.set_case(man_est, man)
+            self.set_case(num_man[0], new_man)
+
+    def deplace_man_S(self):
+        if len(self.cases('@')) == 1:
+            num_man = self.cases('@')
+        else:
+            num_man = self.cases('+')
+        man = self.get_case(num_man[0])
+        man_sud = self.num_case_next(num_man[0], 2)
+        new_man = self.get_case(man_sud)
+        if new_man == '#':
+            return 'mur'
+        elif new_man == '$':
+            self.deplace_caisse_S(man_sud)
+        elif new_man == '*':
+            self.deplace_caisse_S(man_sud)
+        elif new_man == '.':
+            if man == '@':
+                self.set_case(man_sud, '+')
+                self.set_case(num_man[0], ' ')
+            else:
+                self.set_case(man_sud, '+')
+                self.set_case(num_man[0], new_man)
+        else:
+            if man == '+':
+                man = '@'
+                new_man = '.'
+            self.set_case(man_sud, man)
+            self.set_case(num_man[0], new_man)
+        
+    def deplace_man_O(self):
+        if len(self.cases('@')) == 1:
+            num_man = self.cases('@')
+        else:
+            num_man = self.cases('+')
+        man = self.get_case(num_man[0])
+        man_ouest = self.num_case_next(num_man[0], 3)
+        new_man = self.get_case(man_ouest)
+        if new_man == '#':
+            return 'mur'
+        elif new_man == '$':
+            self.deplace_caisse_O(man_ouest)
+        elif new_man == '*':
+            self.deplace_caisse_O(man_ouest)
+        elif new_man == '.':
+            if man == '@':
+                self.set_case(man_ouest, '+')
+                self.set_case(num_man[0], ' ')
+            else:
+                self.set_case(man_ouest, '+')
+                self.set_case(num_man[0], new_man)
+        else:
+            if man == '+':
+                man = '@'
+                new_man = '.'
+            self.set_case(man_ouest, man)
+            self.set_case(num_man[0], new_man)
+
+    def deplace_caisse_N(self, num_caisse):
+        caisse = self.get_case(num_caisse)
+        caisse_nord = self.num_case_next(num_caisse, 0)
+        new_caisse = self.get_case(caisse_nord)
+        if new_caisse == '#':
+            return 'mur'
+        elif new_caisse == '.':
+            self.destination_N(caisse_nord, num_caisse)
+        elif new_caisse == '$':
+            return 'caisse'
+        elif new_caisse == '*':
+            return 'caisse'
+        else:
+            if caisse == '*':
+                caisse = '$'
+                new_caisse = '.'
+            self.set_case(caisse_nord, caisse)
+            self.set_case(num_caisse, new_caisse)
+            self.deplace_man_N()
+
+    def deplace_caisse_E(self, num_caisse):
+        caisse = self.get_case(num_caisse)
+        caisse_est = self.num_case_next(num_caisse, 1)
+        new_caisse = self.get_case(caisse_est)
+        if new_caisse == '#':
+            return 'mur'
+        elif new_caisse == '.':
+            self.destination_E(caisse_est, num_caisse)
+        elif new_caisse == '$':
+            return 'caisse'
+        elif new_caisse == '*':
+            return 'caisse'
+        else:
+            if caisse == '*':
+                caisse = '$'
+                new_caisse = '.'
+            self.set_case(caisse_est, caisse)
+            self.set_case(num_caisse, new_caisse)
+            self.deplace_man_E()
+
+    def deplace_caisse_S(self, num_caisse):
+        caisse = self.get_case(num_caisse)
+        caisse_sud = self.num_case_next(num_caisse, 2)
+        new_caisse = self.get_case(caisse_sud)
+        if new_caisse == '#':
+            return 'mur'
+        elif new_caisse == '.':
+            self.destination_S(caisse_sud, num_caisse)
+        elif new_caisse == '$':
+            return 'caisse'
+        elif new_caisse == '*':
+            return 'caisse'
+        else:
+            if caisse == '*':
+                caisse = '$'
+                new_caisse = '.'
+            self.set_case(caisse_sud, caisse)
+            self.set_case(num_caisse, new_caisse)
+            self.deplace_man_S()
+
+    def deplace_caisse_O(self, num_caisse):
+        caisse = self.get_case(num_caisse)
+        caisse_ouest = self.num_case_next(num_caisse, 3)
+        new_caisse = self.get_case(caisse_ouest)
+        if new_caisse == '#':
+            return 'mur'
+        elif new_caisse == '.':
+            self.destination_O(caisse_ouest, num_caisse)
+        elif new_caisse == '$':
+            return 'caisse'
+        elif new_caisse == '*':
+            return 'caisse'
+        else:
+            if caisse == '*':
+                caisse = '$'
+                new_caisse = '.'
+            self.set_case(caisse_ouest, caisse)
+            self.set_case(num_caisse, new_caisse)
+            self.deplace_man_O()
+
+    def destination_N(self, num_desti, num_caisse):
+        self.set_case(num_desti,' ')
+        self.deplace_caisse_N(num_caisse)
+        self.set_case(num_desti,'*')
+
+    def destination_E(self, num_desti, num_caisse):
+        self.set_case(num_desti,' ')
+        self.deplace_caisse_E(num_caisse)
+        self.set_case(num_desti,'*')
+
+    def destination_S(self, num_desti, num_caisse):
+        self.set_case(num_desti,' ')
+        self.deplace_caisse_S(num_caisse)
+        self.set_case(num_desti,'*')
+
+    def destination_O(self, num_desti, num_caisse):
+        self.set_case(num_desti,' ')
+        self.deplace_caisse_O(num_caisse)
+        self.set_case(num_desti,'*')
+    
+class Jeu:
+
+    LEVELS = []
+
+    def __init__(self, niveau):
+        self.niveaux = listdir('niveaux')
+        for f in self.niveaux:
+            f = 'niveaux/'+f
+            Jeu.LEVELS.append(f)
+        Jeu.LEVELS = list(set(Jeu.LEVELS))
+        Jeu.LEVELS = sorted(Jeu.LEVELS)
+        self.level = LevelSok(Jeu.LEVELS[niveau])
+
+    def __repr__(self):
+        return str(self.level)
+
+    def haut(self):
+        self.level.deplace_man_N()
+        return self.level
+
+    def bas(self):
+        self.level.deplace_man_S()
+        return self.level
+
+    def gauche(self):
+        self.level.deplace_man_O()
+        return self.level
+
+    def droite(self):
+        self.level.deplace_man_E()
+        return self.level
+
+class JeuPygame():
+    
+    def __init__(self, jeu):
+        HEIGH = 720
+        WIDTH = 1260
+        x = f.level.case_to_lc(len(f.level)-1)
+        pixL = WIDTH/2 - x[1]*34/2 - 34
+        pixH = HEIGH/2 - x[0]*34/2 - 34
+        pixl = pixL
+        pixh = pixH
+        for i in str(jeu):
+            if i == '\n':
+                pixh = pixh + 34
+                pixl = pixL
+            elif i == '#':
+                obj = pygame.image.load("img/mur.jpg")
+                screen.blit(obj, (pixl,pixh))
+            elif i == '$':
+                obj = pygame.image.load("img/caisse.jpg")
+                screen.blit(obj, (pixl,pixh))
+            elif i == '.':
+                obj = pygame.image.load("img/objectif.png")
+                screen.blit(obj, (pixl,pixh))
+            elif i == '*':
+                obj = pygame.image.load("img/caisse_ok.jpg")
+                screen.blit(obj, (pixl,pixh))
+            elif i == '@':
+                obj = pygame.image.load("img/perso.gif")
+                screen.blit(obj, (pixl,pixh))
+            elif i == '+':
+                obj = pygame.image.load("img/perso.gif")
+                screen.blit(obj, (pixl,pixh))
+            pixl = pixl + 34
+
+    def victoire(self):
+        text = font.render("Bravo Abdoulaye, vous avez terminé le niveau", 1,(255,255,255))
+        screen.blit(text, (WIDTH/2 - text.get_rect().width/2, HEIGH/4 - text.get_rect().height/4))
+           
+if __name__=="__main__" :
+    
+    z = 0
+    f = Jeu(z)
+    vic = False
+    go = False
+    pygame.init()
+    HEIGH = 720
+    WIDTH = 1260
+    screen = pygame.display.set_mode((WIDTH, HEIGH))
+    font = pygame.font.Font(None, 24)
+    font1 = pygame.font.Font(None, 40)
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if vic == True:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_z:
+                        f.haut()
+                    if event.key == pygame.K_q:
+                        f.gauche()
+                    if event.key == pygame.K_s:
+                        f.bas()
+                    if event.key == pygame.K_d:
+                        f.droite()
+                    if event.key == pygame.K_r:
+                        f = Jeu(z)
+            if vic == False:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        if click.collidepoint(event.pos):
+                            if go == True:
+                                z = z + 1 
+                                f = Jeu(z)
+                                vic = True
+                            if go == False:
+                                go = True
+                                vic = True
+   
+        NOIR = pygame.Color(0,0,0)
+        BLANC = pygame.Color(255,255,255)
+        screen.fill(NOIR)
+
+        fond = pygame.image.load("img/back.png")
+        j = 0
+        while j < HEIGH:
+            i = 0
+            while i < WIDTH:
+                screen.blit(fond, (i,j))
+                i = i + 300
+            j = j + 300
+
+        logo = pygame.image.load("img/logo.png")
+        screen.blit(logo, (WIDTH/2 - 640/2 , HEIGH/4 - 229/2))
+
+        t1 = WIDTH/2
+        t2 = HEIGH/8
+        click = pygame.Rect((WIDTH/2 - t1/2,HEIGH/2 - t2/2),(t1,t2))
+        surface = pygame.Surface(click.size)
+        surface.fill(BLANC)
+        screen.blit(surface, click)
+
+        text = font1.render("Jouer", 1, NOIR)
+        screen.blit(text, (WIDTH/2 - text.get_rect().width/2, HEIGH/2 - text.get_rect().height/2))
+
+        if go == True:
+            screen.fill(NOIR)
+            commande = pygame.image.load("img/commande.png")
+            screen.blit(commande, (0,0))
+            text = font1.render("Niveau " + str(z+1),1,BLANC)
+            screen.blit(text, (220, 20))
+            j = JeuPygame(f)
+            if len(f.level.cases('$')) == 0:
+                j.victoire()
+                vic = False
+            if vic == False:
+                t1 = WIDTH/4
+                t2 = HEIGH/16
+                
+                click = pygame.Rect((WIDTH/2 - t1/2,HEIGH/2 - t2/2),(t1,t2))
+                surface = pygame.Surface(click.size)
+                surface.fill(BLANC)
+                screen.blit(surface, click)
+                text = font.render("Niveau suivant", 1,(0,0,0))
+                screen.blit(text, (WIDTH/2 - text.get_rect().width/2, HEIGH/2 - text.get_rect().height/2))
+            
+        pygame.display.flip()
